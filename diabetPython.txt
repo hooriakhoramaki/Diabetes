@@ -1,0 +1,79 @@
+import numpy as np
+import skfuzzy as fuzz
+from skfuzzy import control as ctrl
+
+# تعریف ورودی‌ها
+fpg = ctrl.Antecedent(np.arange(0, 201, 1), 'fpg')  # قند خون ناشتا
+hba1c = ctrl.Antecedent(np.arange(0, 11, 0.1), 'hba1c')  # HbA1c
+ogtt = ctrl.Antecedent(np.arange(0, 301, 1), 'ogtt')  # تست OGTT
+pregnant = ctrl.Antecedent(np.arange(0, 2, 1), 'pregnant')  # وضعیت بارداری (0 برای خیر، 1 برای بله)
+
+# تعریف خروجی
+diabetes_type = ctrl.Consequent(np.arange(0, 5, 1), 'diabetes_type')
+
+# مجموعه‌های فازی برای FPG
+fpg['normal'] = fuzz.trimf(fpg.universe, [0, 70, 99])
+fpg['prediabetes'] = fuzz.trimf(fpg.universe, [100, 110, 125])
+fpg['diabetes'] = fuzz.trimf(fpg.universe, [126, 140, 200])
+
+# مجموعه‌های فازی برای HbA1c
+hba1c['normal'] = fuzz.trimf(hba1c.universe, [0, 5.7, 5.7])
+hba1c['prediabetes'] = fuzz.trimf(hba1c.universe, [5.7, 6.0, 6.4])
+hba1c['diabetes'] = fuzz.trimf(hba1c.universe, [6.5, 8.0, 10.0])
+
+# مجموعه‌های فازی برای OGTT
+ogtt['normal'] = fuzz.trimf(ogtt.universe, [0, 100, 139])
+ogtt['prediabetes'] = fuzz.trimf(ogtt.universe, [140, 150, 199])
+ogtt['diabetes'] = fuzz.trimf(ogtt.universe, [200, 250, 300])
+
+# مجموعه‌های فازی برای وضعیت بارداری
+pregnant['no'] = fuzz.trimf(pregnant.universe, [0, 0, 1])
+pregnant['yes'] = fuzz.trimf(pregnant.universe, [0, 1, 1])
+
+# مجموعه‌های فازی برای خروجی (نوع دیابت)
+diabetes_type['normal'] = fuzz.trimf(diabetes_type.universe, [0, 0, 1])
+diabetes_type['prediabetes'] = fuzz.trimf(diabetes_type.universe, [0, 1, 2])
+diabetes_type['type_1'] = fuzz.trimf(diabetes_type.universe, [1, 2, 3])
+diabetes_type['type_2'] = fuzz.trimf(diabetes_type.universe, [2, 3, 3])
+diabetes_type['gestational'] = fuzz.trimf(diabetes_type.universe, [3, 4, 4])
+
+# تعریف قوانین فازی
+rule1 = ctrl.Rule(fpg['normal'] & hba1c['normal'] & ogtt['normal'] & pregnant['no'], diabetes_type['normal'])
+rule2 = ctrl.Rule(fpg['prediabetes'] | hba1c['prediabetes'] | ogtt['prediabetes'], diabetes_type['prediabetes'])
+rule3 = ctrl.Rule(fpg['diabetes'] & hba1c['diabetes'] & ogtt['diabetes'] & pregnant['no'], diabetes_type['type_2'])
+rule4 = ctrl.Rule(fpg['diabetes'] & hba1c['diabetes'] & pregnant['no'], diabetes_type['type_1'])  # فقط بر اساس FPG و HbA1c
+rule5 = ctrl.Rule(fpg['diabetes'] | hba1c['diabetes'] | ogtt['diabetes'] & pregnant['yes'], diabetes_type['gestational'])  # دیابت بارداری
+
+# ایجاد سیستم کنترل فازی
+diabetes_ctrl = ctrl.ControlSystem([rule1, rule2, rule3, rule4, rule5])
+diabetes_simulation = ctrl.ControlSystemSimulation(diabetes_ctrl)
+
+# دریافت ورودی‌ها
+fpg_input = float(input("قند خون ناشتا (FPG): "))
+hba1c_input = float(input("HbA1c: "))
+ogtt_input = float(input("OGTT: "))
+pregnant_input = int(input("آیا باردار هستید؟ (1 برای بله, 0 برای خیر): "))
+
+# تنظیم مقادیر ورودی
+diabetes_simulation.input['fpg'] = fpg_input
+diabetes_simulation.input['hba1c'] = hba1c_input
+diabetes_simulation.input['ogtt'] = ogtt_input
+diabetes_simulation.input['pregnant'] = pregnant_input
+
+# اجرای شبیه‌سازی
+diabetes_simulation.compute()
+
+# نمایش خروجی
+output = diabetes_simulation.output['diabetes_type']
+if output < 0.5:
+    diagnosis = "Normal"
+elif 0.5 <= output < 1.5:
+    diagnosis = "Pre-Diabetes"
+elif 1.5 <= output < 2.5:
+    diagnosis = "Type 1 Diabetes"
+elif 2.5 <= output < 3.5:
+    diagnosis = "Type 2 Diabetes"
+else:
+    diagnosis = "Gestational Diabetes"
+
+print("تشخیص: ", diagnosis)
